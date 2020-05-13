@@ -26,7 +26,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dnstap/golang-dnstap"
+	dnstap ".."
 )
 
 type stringList []string
@@ -40,12 +40,13 @@ func (sl *stringList) String() string {
 }
 
 var (
-	flagTimeout    = flag.Duration("t", 0, "I/O timeout for tcp/ip and unix domain sockets")
-	flagWriteFile  = flag.String("w", "", "write output to file")
-	flagAppendFile = flag.Bool("a", false, "append to the given file, do not overwrite. valid only when outputting a text or YAML file.")
-	flagQuietText  = flag.Bool("q", false, "use quiet text output")
-	flagYamlText   = flag.Bool("y", false, "use verbose YAML output")
-	flagJSONText   = flag.Bool("j", false, "use verbose JSON output")
+	flagTimeout     = flag.Duration("t", 0, "I/O timeout for tcp/ip and unix domain sockets")
+	flagWriteFile   = flag.String("w", "", "write output to file")
+	flagWriteSyslog = flag.Bool("s", false, "write to local syslog in JSON output")
+	flagAppendFile  = flag.Bool("a", false, "append to the given file, do not overwrite. valid only when outputting a text or YAML file.")
+	flagQuietText   = flag.Bool("q", false, "use quiet text output")
+	flagYamlText    = flag.Bool("y", false, "use verbose YAML output")
+	flagJSONText    = flag.Bool("j", false, "use verbose JSON output")
 )
 
 func usage() {
@@ -107,6 +108,17 @@ func main() {
 	if err := addSockOutputs(output, "unix", unixOutputs); err != nil {
 		fmt.Fprintf(os.Stderr, "dnstap: Unix socket error: %v\n", err)
 		os.Exit(1)
+	}
+	if *flagWriteSyslog {
+		format := dnstap.JSONFormat
+		o, err := newSyslogOutput(format)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "dnstap: Syslog output error: '%s': %v\n",
+				err)
+			os.Exit(1)
+		}
+		go o.RunOutputLoop()
+		output.Add(o)
 	}
 	if *flagWriteFile != "" || len(tcpOutputs)+len(unixOutputs) == 0 {
 		var format dnstap.TextFormatFunc
